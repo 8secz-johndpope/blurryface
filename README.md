@@ -3,7 +3,7 @@ Robustly anonymizing videos using deep neural networks
 
 
 # Todo
-- [ ] Dataset
+- [ ] Dataset: https://github.com/NVlabs/ffhq-dataset
 - [ ] Feature extractors
   - [ ] Facenet
   - [ ] Face++
