@@ -26,15 +26,6 @@ class LatentGen(nn.Module):
         x = self.model(x)[0]
         return x
 
-    def train(self, mode=True):
-        if mode:
-            self.model.fc2.train()
-        else:
-            self.eval()
-
-    def eval(self):
-        self.model.fc2.eval()
-
     @classmethod
     def build(cls, model_type="LightCNN_9Layers", checkpoint="LightCNN_9Layers_checkpoint.pth.tar", cuda=True):
         assert model_type in ["LightCNN_9Layers", "LightCNN_29Layers_v2"]
@@ -58,10 +49,12 @@ class LatentGen(nn.Module):
         else:
             checkpoint = torch.load(checkpoint, map_location='cpu')
 
-        model.load_state_dict(checkpoint['state_dict'])
+        model.load_state_dict(checkpoint['state_dict'], strict = False)
 
         # Now replace the linear layer with a new linear layer
         model.module.fc2 = nn.Linear(256, 512)  # maps to the latent space of the stylegan
+        if cuda:
+            model.module.fc2.cuda()
 
         model.eval()
         for param in model.module.parameters():
@@ -72,7 +65,3 @@ class LatentGen(nn.Module):
             param.requires_grad = True
 
         return cls(model)
-
-
-
-

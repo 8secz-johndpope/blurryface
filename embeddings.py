@@ -39,9 +39,7 @@ class EmbeddingGen(torch.nn.Module):
         """
         transformed = F.interpolate(images, size=(128, 128))
         transformed = self._diff_grayscale(transformed)
-        if cuda_flag:
-            transformed.cuda()
-        return model.module.get_features(transformed)
+        return self.model(transformed)[1]
 
     @classmethod
     def build(cls, model_type="LightCNN_9Layers", cuda=True, checkpoint="LightCNN_9Layers_checkpoint.pth.tar"):
@@ -55,10 +53,8 @@ class EmbeddingGen(torch.nn.Module):
         print("=> loading face embedding checkpoint '{}'".format(checkpoint))
         checkpoint = torch.load(checkpoint) if cuda else torch.load(checkpoint, map_location='cpu')
 
-        model.load_state_dict(checkpoint['state_dict'])
+        model.load_state_dict(checkpoint['state_dict'], strict = False)
         model.eval()
+        for param in model.parameters():
+            param.requires_grad = False
         return model
-
-
-
-
