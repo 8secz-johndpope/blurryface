@@ -3,62 +3,63 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 from torchvision import models
-import matplotlib.pyplot as plt
-import time
-import os
-import copy
+
+from torchvision import transforms
 
 from stylegan import get_style_gan
-from ffhq_dataset import get_dataloader
 
 from torch.nn.functional import interpolate
 
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+
 def main():
-    batch_size = 8
+    batch_size = 32
+    lr = 1e-3
 
     resnet = build_resnet_model()
     anonymizer = get_style_gan()
-    data_loader, pretransforms = get_dataloader(batch_size=batch_size)
 
-    optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=1e-3)
+    optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=lr)
     loss_fn = torch.nn.MSELoss()
 
-    num_iterations = 0
+    for i in range(10000000, step=batch_size):
 
-    for epoch in range(10):
-        for i, (og_image, _) in enumerate(data_loader):
-            transformed_image = pretransforms(og_image)
-            transformed_image.cuda()
-            latent_features = resnet(transformed_image)
-            generated_image = anonymizer(latent_features)
+        with torch.no_grad():
+            latents = torch.randn(batch_size, 512).cuda()
+            generated_image = anonymizer(latents)
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
-            generated_image = interpolate(generated_image, size=(128, 128))
+            generated_image = interpolate(generated_image, size=(224, 224))
+            generated_image = torch.stack([normalize(x) for x in generated_image])
 
-            loss = loss_fn(generated_image, og_image) # we wanna make the latent features representative
-            loss.backward()
-            optimizer.step()
+        predicted_features = resnet(generated_image.detach())
 
-            num_iterations += 1
+        loss = loss_fn(predicted_features, latents) # we wanna make the latent features representative
+        loss.backward()
+        optimizer.step()
 
-            if num_iterations % 100 == 0:
-                print("iteration:", num_iterations * batch_size, "loss:", loss.item())
-                if num_iterations % 10000 == 0:
-                    print("Saving checkpoint ...")
-                    torch.save(resnet.state_dict(), "checkpoints/" +
-                               "resnet_at_iteration_" + str(num_iterations) + ".tar")
-                    print("checkpoints/" +
-                          "resnet_at_iteration_" + str(num_iterations) + ".tar")
+        if i % 128 == 0:
+            print(f"Iteration: {i} \t Loss {loss.item()}")
 
-                    # Sample input/output
-                    input_image = torchvision.utils.make_grid(og_image, nrow=4)
-                    output_image = torchvision.utils.make_grid(generated_image, nrow=4)
-                    torchvision.utils.save_image(input_image, "input_output/" + str(
-                        num_iterations) + "input" + ".png", nrow=10, range=(-1, 1))
-                    torchvision.utils.save_image(output_image, "input_output/" + str(
-                        num_iterations) + "output" + ".png", nrow=10, range=(-1, 1))
-                    print("saved", str(
-                        num_iterations) + "input" + ".png", str(
-                            num_iterations) + "output" + ".png")
+        # if i % 128 == 0:
+        #     print("iteration:", i * batch_size, "loss:", loss.item())
+        #     if i % 128 == 0:
+        #         print("Saving checkpoint ...")
+        #         torch.save(resnet.state_dict(), "checkpoints/" +
+        #                    "resnet_at_iteration_" + str(i) + ".tar")
+        #         print("checkpoints/" +
+        #               "resnet_at_iteration_" + str(i) + ".tar")
+        #
+        #         # Sample input/output
+        #         input_image = torchvision.utils.make_grid(og_image, nrow=4)
+        #         output_image = torchvision.utils.make_grid(generated_image, nrow=4)
+        #         torchvision.utils.save_image(input_image, "input_output/" + str(
+        #             i) + "input" + ".png", nrow=10, range=(-1, 1))
+        #         torchvision.utils.save_image(output_image, "input_output/" + str(
+        #             i) + "output" + ".png", nrow=10, range=(-1, 1))
+        #         print("saved", str(
+        #             i) + "input" + ".png", str(
+        #                 i) + "output" + ".png")
 
 def build_resnet_model(latent_space=512, feature_extracting=True):
     resnet = models.resnet18(pretrained=True)
