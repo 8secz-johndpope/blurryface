@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
-t
+from torchvision import models
 import matplotlib.pyplot as plt
 import time
 import os
