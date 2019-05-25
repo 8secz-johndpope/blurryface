@@ -3,17 +3,15 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 from torchvision import models
-
 from torchvision import transforms
-
 from stylegan import get_style_gan
-
 from torch.nn.functional import interpolate
 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
 
 def main():
+    num_eval = 100
     batch_size = 64
     full_lr = 1e-3
     fc_lr = 1e-3
@@ -24,6 +22,8 @@ def main():
 
     for param in resnet.parameters(): # Unfreeze the full model
         param.requires_grad = True
+    resnet.train()
+    anonymizer.eval()
 
     optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=full_lr)
     run_training(5000, batch_size, anonymizer, resnet, optimizer, loss_fn)
@@ -33,8 +33,43 @@ def main():
         param.requires_grad = False
     for param in resnet.fc.parameters(): # Unfreeze the fc layer
         param.requires_grad = True
+    resnet.eval()
+    resnet.fc.train()
+    anonymizer.eval()
     optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=fc_lr)
     run_training(5000, batch_size, anonymizer, resnet, optimizer, loss_fn)
+
+
+    ######
+    # Run Eval
+    print(f"Evaluating On {num_eval} Images")
+    print("Saving checkpoint ...")
+
+    anonymizer.eval()
+    resnet.eval()
+    for i in range(0, num_eval, 5):
+        with torch.no_grad:
+            latents = torch.randn(batch_size, 512).cuda()
+            generated_image = anonymizer(latents)
+            generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
+
+            preprocessed_image = interpolate(generated_image, size=(224, 224)).cpu()
+            preprocessed_image = torch.stack([normalize(x).cpu() for x in preprocessed_image]).detach().cuda()
+            predicted_features = resnet(preprocessed_image)
+
+            resnet_based_images = anonymizer(predicted_features)
+            resnet_based_images = (resnet_based_images.clamp(-1, 1) + 1) / 2.0
+
+            generator_image = torchvision.utils.make_grid(generated_image, nrow=4)
+            resnet_image = torchvision.utils.make_grid(resnet_based_images, nrow=4)
+            torchvision.utils.save_image(generator_image, "input_output/" + str(
+                i) + "gen" + ".png", nrow=10, range=(-1, 1))
+            torchvision.utils.save_image(generator_image, "input_output/" + str(
+                i) + "res" + ".png", nrow=10, range=(-1, 1))
+
+    print("Saved Images")
+
+
 
 
 def run_training(num_images, batch_size, anonymizer, resnet, optimizer, loss_fn):
