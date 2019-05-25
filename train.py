@@ -23,16 +23,16 @@ def main():
     optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=lr)
     loss_fn = torch.nn.MSELoss()
 
-    for i in range(10000000, step=batch_size):
+    for i in range(0, 10000000, batch_size):
 
         with torch.no_grad():
             latents = torch.randn(batch_size, 512).cuda()
             generated_image = anonymizer(latents)
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
-            generated_image = interpolate(generated_image, size=(224, 224))
-            generated_image = torch.stack([normalize(x) for x in generated_image])
+            generated_image = interpolate(generated_image, size=(224, 224)).cpu()
+            generated_image = torch.stack([normalize(x).cpu() for x in generated_image]).detach().cuda()
 
-        predicted_features = resnet(generated_image.detach())
+        predicted_features = resnet(generated_image)
 
         loss = loss_fn(predicted_features, latents) # we wanna make the latent features representative
         loss.backward()
