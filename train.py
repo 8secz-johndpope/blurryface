@@ -27,8 +27,9 @@ def main():
 
     for epoch in range(10):
         for i, (og_image, _) in enumerate(data_loader):
-            og_image = og_image.cuda()
-            latent_features = resnet(pretransforms(og_image))
+            transformed_image = pretransforms(og_image)
+            transformed_image.cuda()
+            latent_features = resnet(transformed_image)
             generated_image = anonymizer(latent_features)
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
             generated_image = interpolate(generated_image, size=(128, 128))
