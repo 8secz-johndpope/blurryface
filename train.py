@@ -14,16 +14,31 @@ normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
 
 def main():
-    batch_size = 32
-    lr = 1e-3
+    batch_size = 64
+    full_lr = 1e-3
+    fc_lr = 1e-3
 
     resnet = build_resnet_model()
     anonymizer = get_style_gan()
-
-    optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=lr)
     loss_fn = torch.nn.MSELoss()
 
-    for i in range(0, 10000000, batch_size):
+    for param in resnet.parameters(): # Unfreeze the full model
+        param.requires_grad = True
+
+    optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=full_lr)
+    run_training(5000, batch_size, anonymizer, resnet, optimizer, loss_fn)
+
+    # Now freeze the full model and then train only the fc layer
+    for param in resnet.parameters(): # Freeze the full model
+        param.requires_grad = False
+    for param in resnet.fc.parameters(): # Unfreeze the fc layer
+        param.requires_grad = True
+    optimizer = optim.Adam(filter(lambda x: x.requires_grad, resnet.parameters()), lr=fc_lr)
+    run_training(5000, batch_size, anonymizer, resnet, optimizer, loss_fn)
+
+
+def run_training(num_images, batch_size, anonymizer, resnet, optimizer, loss_fn):
+    for i in range(0, num_images, batch_size):
 
         with torch.no_grad():
             latents = torch.randn(batch_size, 512).cuda()
@@ -37,44 +52,40 @@ def main():
         loss = loss_fn(predicted_features, latents) # we wanna make the latent features representative
         loss.backward()
         optimizer.step()
+        optimizer.zero_grad()
 
         if i % 128 == 0:
-            print(f"Iteration: {i} \t Loss {loss.item()}")
+            print(f"Iteration: {i} \t\t Loss {loss.item()}")
 
-        # if i % 128 == 0:
-        #     print("iteration:", i * batch_size, "loss:", loss.item())
-        #     if i % 128 == 0:
-        #         print("Saving checkpoint ...")
-        #         torch.save(resnet.state_dict(), "checkpoints/" +
-        #                    "resnet_at_iteration_" + str(i) + ".tar")
-        #         print("checkpoints/" +
-        #               "resnet_at_iteration_" + str(i) + ".tar")
-        #
-        #         # Sample input/output
-        #         input_image = torchvision.utils.make_grid(og_image, nrow=4)
-        #         output_image = torchvision.utils.make_grid(generated_image, nrow=4)
-        #         torchvision.utils.save_image(input_image, "input_output/" + str(
-        #             i) + "input" + ".png", nrow=10, range=(-1, 1))
-        #         torchvision.utils.save_image(output_image, "input_output/" + str(
-        #             i) + "output" + ".png", nrow=10, range=(-1, 1))
-        #         print("saved", str(
-        #             i) + "input" + ".png", str(
-        #                 i) + "output" + ".png")
-
-def build_resnet_model(latent_space=512, feature_extracting=True):
+def build_resnet_model(latent_space=512):
     resnet = models.resnet18(pretrained=True)
-
-    if feature_extracting:
-        for param in resnet.parameters():
-            param.requires_grad = False
     resnet.fc = nn.Linear(512, latent_space, bias=True)
     for param in resnet.fc.parameters():
         param.requires_grad = True
-
     resnet = resnet.cuda()
 
     return resnet
 
+
+# if i % 128 == 0:
+#     print("iteration:", i * batch_size, "loss:", loss.item())
+#     if i % 128 == 0:
+#         print("Saving checkpoint ...")
+#         torch.save(resnet.state_dict(), "checkpoints/" +
+#                    "resnet_at_iteration_" + str(i) + ".tar")
+#         print("checkpoints/" +
+#               "resnet_at_iteration_" + str(i) + ".tar")
+#
+#         # Sample input/output
+#         input_image = torchvision.utils.make_grid(og_image, nrow=4)
+#         output_image = torchvision.utils.make_grid(generated_image, nrow=4)
+#         torchvision.utils.save_image(input_image, "input_output/" + str(
+#             i) + "input" + ".png", nrow=10, range=(-1, 1))
+#         torchvision.utils.save_image(output_image, "input_output/" + str(
+#             i) + "output" + ".png", nrow=10, range=(-1, 1))
+#         print("saved", str(
+#             i) + "input" + ".png", str(
+#                 i) + "output" + ".png")
 
 
 # def train(model, latent_generator, discriminator, optimizer, data_loader, batch_size):
