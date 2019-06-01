@@ -55,7 +55,7 @@ def main():
             #     aligned.append(x_aligned)
             # preprocessed_image = torch.stack(aligned)
             predicted_features = facenet(preprocessed_image)
-            predicted_features = fc(predicted_features)
+            predicted_features = fc(fp.prewhiten(predicted_features))
 
             resnet_based_images = anonymizer(predicted_features)
             resnet_based_images = (resnet_based_images.clamp(-1, 1) + 1) / 2.0
@@ -86,7 +86,7 @@ def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimiz
             #     x_aligned = mtcnn(img.cpu())
             #     aligned.append(x_aligned)
             # generated_image = torch.stack(aligned)
-            predicted_features = facenet(generated_image)
+            predicted_features = facenet(fp.prewhiten(generated_image))
 
         predicted_features = fc(predicted_features)
 
