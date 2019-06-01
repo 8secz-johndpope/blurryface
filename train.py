@@ -106,13 +106,14 @@ def build_facenet_model(latent_space=512):
 
     facenet = facenet.cuda()
 
-    fc = nn.Sequential([
+    fc = nn.Sequential(*[
         nn.Linear(512, 1024),
         nn.ReLU(),
         nn.Linear(1024,latent_space)
     ])
 
     fc.train()
+    fc = fc.cuda()
 
     return mtcnn, facenet, fc
 
