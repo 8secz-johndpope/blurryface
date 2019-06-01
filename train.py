@@ -4,7 +4,6 @@ import torch.optim as optim
 import torchvision
 from stylegan import get_style_gan
 from torchvision import transforms
-import numpy as np
 from torch.nn.functional import interpolate
 
 import facenet_pytorch as fp
@@ -15,8 +14,7 @@ trans = transforms.Compose([
 
 def main():
     num_eval = 100
-    batch_size = 64
-    # full_lr = 1e-3
+    batch_size = 32
     fc_lr = 1e-3
 
     mtcnn, facenet, fc = build_facenet_model()
@@ -49,13 +47,13 @@ def main():
             generated_image = anonymizer(latents)
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
 
-            preprocessed_image = interpolate(generated_image, size=(512, 512))
+            preprocessed_image = interpolate(generated_image, size=(160, 160))
 
-            aligned = []
-            for img in preprocessed_image:
-                x_aligned = mtcnn(img)
-                aligned.append(x_aligned)
-            preprocessed_image = torch.stack(aligned)
+            # aligned = []
+            # for img in preprocessed_image:
+            #     x_aligned = mtcnn(img.cpu())
+            #     aligned.append(x_aligned)
+            # preprocessed_image = torch.stack(aligned)
             predicted_features = facenet(preprocessed_image)
             predicted_features = fc(predicted_features)
 
@@ -81,13 +79,13 @@ def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimiz
             latents = torch.randn(batch_size, 512).cuda()
             generated_image = anonymizer(latents)
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
-            generated_image = interpolate(generated_image, size=(512, 512))
+            generated_image = interpolate(generated_image, size=(160, 160))
 
-            aligned = []
-            for img in generated_image:
-                x_aligned = mtcnn(img)
-                aligned.append(x_aligned)
-            generated_image = torch.stack(aligned)
+            # aligned = []
+            # for img in generated_image:
+            #     x_aligned = mtcnn(img.cpu())
+            #     aligned.append(x_aligned)
+            # generated_image = torch.stack(aligned)
             predicted_features = facenet(generated_image)
 
         predicted_features = fc(predicted_features)
