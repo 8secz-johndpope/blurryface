@@ -81,11 +81,14 @@ def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimiz
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
             generated_image = interpolate(generated_image, size=(160, 160))
 
-            # aligned = []
-            # for img in generated_image:
-            #     x_aligned = mtcnn(img.cpu())
-            #     aligned.append(x_aligned)
-            # generated_image = torch.stack(aligned)
+            aligned = []
+            for img in generated_image:
+                x_aligned = mtcnn(img.cpu())
+                aligned.append(x_aligned)
+            generated_image = torch.stack(aligned)
+            if len(aligned) == 0:
+                print("Couldn't find any faces in this batch")
+                continue
             predicted_features = facenet(fp.prewhiten(generated_image))
 
         predicted_features = fc(predicted_features)
