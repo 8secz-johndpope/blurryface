@@ -8,15 +8,15 @@ from torch.nn.functional import interpolate
 
 import facenet_pytorch as fp
 import cv2, dlib
-
+import math
 
 scale = 4
 detector = dlib.get_frontal_face_detector()
 
 def main():
-    num_eval = 100
+    num_eval = 50
     batch_size = 32
-    fc_lr = 1e-3
+    fc_lr = 1e-2
 
     mtcnn, facenet, fc = build_facenet_model()
     anonymizer = get_style_gan()
@@ -32,7 +32,7 @@ def main():
     fc.train()
     anonymizer.eval()
     optimizer = optim.Adam(filter(lambda x: x.requires_grad, fc.parameters()), lr=fc_lr)
-    run_training(10000, batch_size, anonymizer, mtcnn, facenet, fc, optimizer, loss_fn)
+    run_training(1000, batch_size, anonymizer, mtcnn, facenet, fc, optimizer, loss_fn)
 
 
     ######
@@ -59,9 +59,13 @@ def main():
                     cropped_image = interpolate(cropped_image, size=160)
                     aligned.append(cropped_image)
                 else:
-                    print("Using full image instead, could not find the face in this picture")
                     aligned.append(interpolate(ogimg, size=160))
-
+            for i in range(len(aligned)):
+                target = torch.zeros(3,160,160)
+                w = aligned[i].size(1)
+                h = aligned[i].size(2)
+                target[:, math.floor((160 - w)/2):160 - math.ceil((160 - w)/2), :] = aligned[i]
+                aligned[i] = target
             preprocessed_image = torch.stack(aligned).cuda()
             predicted_features = facenet(preprocessed_image)
             predicted_features = fc(predicted_features)
@@ -82,7 +86,7 @@ def main():
 
 
 def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimizer, loss_fn):
-    for i in range(0, num_images, batch_size):
+    for j in range(0, num_images, batch_size):
 
         with torch.no_grad():
             latents = torch.randn(batch_size, 512).cuda()
@@ -100,9 +104,13 @@ def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimiz
                     cropped_image = interpolate(cropped_image, size=160)
                     aligned.append(cropped_image)
                 else:
-                    print("Using full image instead, could not find the face in this picture")
                     aligned.append(interpolate(ogimg, size=160))
-
+            for i in range(len(aligned)):
+                    target = torch.zeros(3,160,160)
+                    w = aligned[i].size(1)
+                    h = aligned[i].size(2)
+                    target[:, math.floor((160 - w)/2):160 - math.ceil((160 - w)/2), :] = aligned[i]
+                    aligned[i] = target
             generated_image = torch.stack(aligned).cuda()
             predicted_features = facenet(generated_image)
 
@@ -113,8 +121,8 @@ def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimiz
         optimizer.step()
         optimizer.zero_grad()
 
-        if i % 128 == 0:
-            print(f"Iteration: {i} \t\t Loss {loss.item()}")
+        if j % 128 == 0:
+            print(f"Iteration: {j} \t\t Loss {loss.item()}")
 
 def build_facenet_model(latent_space=512):
     mtcnn = fp.MTCNN(device=torch.device("cuda"))
@@ -125,9 +133,15 @@ def build_facenet_model(latent_space=512):
     facenet = facenet.cuda()
 
     fc = nn.Sequential(*[
-        nn.Linear(512, 1024),
-        nn.ReLU(),
-        nn.Linear(1024,latent_space)
+#        nn.Linear(512, 512),
+#        nn.ReLU(),
+#        nn.Linear(512, 512),
+#        nn.ReLU(),
+#        nn.Linear(512, 512),
+#        nn.ReLU(),
+#        nn.Linear(512, 512),
+#        nn.ReLU(),
+       nn.Linear(512,latent_space)
     ])
 
     fc.train()
