@@ -42,7 +42,7 @@ def main():
     anonymizer.eval()
     facenet.eval()
     for i in range(0, num_eval, 5):
-        with torch.no_grad:
+        with torch.no_grad():
             latents = torch.randn(batch_size, 512).cuda()
             generated_image = anonymizer(latents)
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
@@ -50,15 +50,15 @@ def main():
             aligned = []
             for img in generated_image:
                 x_aligned = mtcnn(img.cpu() * 255)
-                if x_aligned:
+                if type(x_aligned) != type(None):
                     aligned.append(x_aligned)
                 else:
                     print("Using full image instead")
-                    aligned.append(interpolate(img, size=(160, 160)))
+                    aligned.append(interpolate(img.cpu(), size=160))
 
-            preprocessed_image = torch.stack(aligned)
+            preprocessed_image = torch.stack(aligned).cuda()
             predicted_features = facenet(preprocessed_image)
-            predicted_features = fc(fp.prewhiten(predicted_features))
+            predicted_features = fc(predicted_features)
 
             resnet_based_images = anonymizer(predicted_features)
             resnet_based_images = (resnet_based_images.clamp(-1, 1) + 1) / 2.0
@@ -87,14 +87,14 @@ def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimiz
             aligned = []
             for img in generated_image:
                 x_aligned = mtcnn(img.cpu() * 255)
-                if x_aligned:
+                if type(x_aligned) != type(None):
                     aligned.append(x_aligned)
                 else:
                     print("Using full image instead")
-                    aligned.append(interpolate(img, size=(160, 160)))
+                    aligned.append(interpolate(img.cpu(), size=160))
 
-            generated_image = torch.stack(aligned)
-            predicted_features = facenet(fp.prewhiten(generated_image))
+            generated_image = torch.stack(aligned).cuda()
+            predicted_features = facenet(generated_image)
 
         predicted_features = fc(predicted_features)
 
