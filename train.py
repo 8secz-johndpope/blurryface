@@ -7,10 +7,11 @@ from torchvision import transforms
 from torch.nn.functional import interpolate
 
 import facenet_pytorch as fp
+import cv2, dlib
 
-trans = transforms.Compose([
-    torch.Tensor.byte
-])
+
+scale = 4
+detector = dlib.get_frontal_face_detector()
 
 def main():
     num_eval = 100
@@ -48,13 +49,18 @@ def main():
             generated_image = (generated_image.clamp(-1, 1) + 1) / 2.0
 
             aligned = []
-            for img in generated_image:
-                x_aligned = mtcnn(img.cpu() * 255)
-                if type(x_aligned) != type(None):
-                    aligned.append(x_aligned)
+            for ogimg in generated_image:
+                img = ogimg.permute(1, 2, 0).cpu().numpy() * 255
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                dets = detector(img.astype('uint8'), 1)
+
+                if len(dets) > 0:
+                    cropped_image = fp.prewhiten(crop_image(ogimg.permute(1, 2, 0), dets[0])).permute(2,0,1)
+                    cropped_image = interpolate(cropped_image, size=160)
+                    aligned.append(cropped_image)
                 else:
-                    print("Using full image instead")
-                    aligned.append(interpolate(img.cpu(), size=160))
+                    print("Using full image instead, could not find the face in this picture")
+                    aligned.append(interpolate(ogimg, size=160))
 
             preprocessed_image = torch.stack(aligned).cuda()
             predicted_features = facenet(preprocessed_image)
@@ -85,13 +91,17 @@ def run_training(num_images, batch_size, anonymizer, mtcnn, facenet, fc, optimiz
             generated_image = interpolate(generated_image, size=(160, 160))
 
             aligned = []
-            for img in generated_image:
-                x_aligned = mtcnn(img.cpu() * 255)
-                if type(x_aligned) != type(None):
-                    aligned.append(x_aligned)
+            for ogimg in generated_image:
+                img = ogimg.permute(1, 2, 0).cpu().numpy() * 255
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                dets = detector(img.astype('uint8'), 1)
+                if len(dets) > 0:
+                    cropped_image = fp.prewhiten(crop_image(ogimg.permute(1, 2, 0), dets[0])).permute(2,0,1)
+                    cropped_image = interpolate(cropped_image, size=160)
+                    aligned.append(cropped_image)
                 else:
-                    print("Using full image instead")
-                    aligned.append(interpolate(img.cpu(), size=160))
+                    print("Using full image instead, could not find the face in this picture")
+                    aligned.append(interpolate(ogimg, size=160))
 
             generated_image = torch.stack(aligned).cuda()
             predicted_features = facenet(generated_image)
@@ -136,7 +146,7 @@ def build_facenet_model(latent_space=512):
     #     param.requires_grad = True
     # resnet = resnet.cuda()
 
-    return resnet
+    # return resnet
 
 
 # if i % 128 == 0:
@@ -201,6 +211,17 @@ def build_facenet_model(latent_space=512):
 #                             iteration_counter) + "output" + ".png")
 #             iteration_counter += 1
 #         print("epoch", epoch, "done")
+
+def crop_image(image, det):
+    left, top, right, bottom = rect_to_tuple(det)
+    return image[top:bottom, left:right]
+
+def rect_to_tuple(rect):
+    left = rect.left()
+    right = rect.right()
+    top = rect.top()
+    bottom = rect.bottom()
+    return left, top, right, bottom
 
 if __name__ == '__main__':
     main()
